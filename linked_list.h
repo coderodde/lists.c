@@ -21,8 +21,8 @@ struct linked_list* linked_list_create();
 bool linked_list_push_front(struct linked_list* list, void* value);
 bool linked_list_push_back(struct linked_list* list, void* value);
 bool linked_list_insert(struct linked_list* list, size_t index, void* value);
-bool linked_list__push_front_array(struct linked_list* list, void** values, size_t count);
-bool linked_list__push_back_array(struct linked_list* list, void** values, size_t count);
+bool linked_list_push_front_array(struct linked_list* list, void** values, size_t count);
+bool linked_list_push_back_array(struct linked_list* list, void** values, size_t count);
 bool linked_list_insert_array(struct linked_list* list, size_t index, void** values, size_t count);
 
 // Size querying functions.

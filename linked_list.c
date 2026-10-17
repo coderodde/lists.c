@@ -1,6 +1,24 @@
 #include "linked_list.h"
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
+
+static void* check_not_null(void* ptr, const char* file, int line, const char* func)
+{
+    if (ptr == NULL)
+    {
+        fprintf(stderr, "Null pointer error in %s at %s:%d\n", func, file, line);
+        exit(EXIT_FAILURE);
+    }
+
+    return ptr;
+}
+
+#ifdef NDEBUG
+#define CHECK_NOT_NULL(ptr) (ptr)
+#else
+#define CHECK_NOT_NULL(ptr) check_not_null(ptr, __FILE__, __LINE__, __func__)
+#endif
 
 struct linked_list_node {
     void* value;
@@ -23,21 +41,407 @@ struct linked_list_iterator {
 
 struct linked_list* linked_list_create();
 
+static struct linked_list_node* get_node(struct linked_list* list, size_t index)
+{
+    size_t left_distance  = index;
+    size_t right_distance = linked_list_size(list) - index - 1;
+
+    if (left_distance < right_distance)
+    {
+        struct linked_list_node* current = list->head;
+        
+        for (size_t i = 0; i < index; ++i)
+        {
+            current = current->next;
+        }
+
+        return current;
+    } 
+    else 
+    {
+        struct linked_list_node* current = list->tail;
+
+        for (size_t i = 0; i < right_distance; ++i) {
+            current = current->prev;
+        }
+
+        return current;
+    }
+}
+
+static void check_access_index_bounds(struct linked_list* list, size_t index, enum ll_error_code* err)
+{
+    if (index >= linked_list_size(list))
+    {
+        if (err != NULL)
+        {
+            *err = LL_INDEX_OUT_OF_BOUNDS;
+        }
+    } 
+    else
+    {
+        if (err != NULL)
+        {
+            *err = LL_NO_ERROR;
+        }
+    }
+}
+
+static void check_insertion_index_bounds(struct linked_list* list, size_t index, enum ll_error_code* err)
+{
+    if (index > linked_list_size(list))
+    {
+        if (err != NULL)
+        {
+            *err = LL_INDEX_OUT_OF_BOUNDS;
+        }
+    } 
+    else
+    {
+        if (err != NULL)
+        {
+            *err = LL_NO_ERROR;
+        }
+    }
+}
+
 // Insertion functions.
 bool linked_list_push_front(struct linked_list* list, void* value)
 {
-    
+    if (list == NULL)
+    {
+        return false;
+    }
+
+    struct linked_list_node* new_node = malloc(sizeof(struct linked_list_node));
+
+    if (new_node == NULL)
+    {
+        return false;
+    }
+
+    new_node->value = value;
+    new_node->next  = list->head;
+    new_node->prev  = NULL;
+
+    if (list->head != NULL)
+    {
+        list->head->prev = new_node;
+    }
+    else
+    {
+        list->tail = new_node;
+    }
+
+    list->head = new_node;
+    list->size++;
+
+    return true;
 }
 
-bool linked_list_push_back(struct linked_list* list, void* value);
-bool linked_list_insert(struct linked_list* list, size_t index, void* value);
-bool linked_list__push_front_array(struct linked_list* list, void** values, size_t count);
-bool linked_list__push_back_array(struct linked_list* list, void** values, size_t count);
-bool linked_list_insert_array(struct linked_list* list, size_t index, void** values, size_t count);
+bool linked_list_push_back(struct linked_list* list, void* value) 
+{
+    if (list == NULL)
+    {
+        return false;
+    }
+
+    struct linked_list_node* new_node = malloc(sizeof(struct linked_list_node));
+    
+    if (new_node == NULL)
+    {
+        return false;
+    }
+
+    new_node->value = value;
+    new_node->next = NULL;
+    new_node->prev = list->tail;
+
+    if (list->tail != NULL)
+    {
+        list->tail->next = new_node;
+    }
+    else
+    {
+        list->head = new_node;
+    }
+
+    list->tail = new_node;
+    list->size++;
+
+    return true;
+}
+
+bool linked_list_insert(struct linked_list* list, size_t index, void* value)
+{
+    if (list == NULL)
+    {
+        return false;
+    }
+
+    enum ll_error_code err;
+
+    check_insertion_index_bounds(list, index, &err);
+
+    if (err != LL_NO_ERROR)
+    {
+        return false;
+    }
+
+    if (index == 0)
+    {
+        return linked_list_push_front(list, value);
+    } 
+    else if (index == linked_list_size(list))
+    {
+        return linked_list_push_back(list, value);
+    }
+    else
+    {
+        struct linked_list_node* new_node = malloc(sizeof(struct linked_list_node));
+
+        if (new_node == NULL)
+        {
+            return false;
+        }
+
+        struct linked_list_node* succ     = get_node(list, index);
+        struct linked_list_node* pred     = succ->prev;
+
+        new_node->value = value;
+        new_node->next  = succ;
+        new_node->prev  = pred;
+        pred->next      = new_node;
+        succ->prev      = new_node;
+        
+        list->size++;
+
+        return true;
+    }
+}
+
+static void rollback_on_push_front_array(struct linked_list* list, size_t count)
+{
+    for (size_t i = 0; i < count; ++i)
+    {
+        struct linked_list_node* node_to_remove = list->head;
+
+        list->head = node_to_remove->next;
+
+        if (list->head != NULL)
+        {
+            list->head->prev = NULL;
+        } 
+        else
+        {
+            list->tail = NULL;
+        }
+
+        free(node_to_remove);
+    }
+
+    list->size -= count;
+}
+
+static void rollback_on_push_back_array(struct linked_list* list, size_t count)
+{
+    for (size_t i = 0; i < count; ++i)
+    {
+        struct linked_list_node* node_to_remove = list->tail;
+
+        list->tail = node_to_remove->prev;
+
+        if (list->tail != NULL)
+        {
+            list->tail->next = NULL;
+        }
+        else
+        {
+            list->head = NULL;
+        }
+
+        free(node_to_remove);
+    }
+
+    list->size -= count;
+}
+
+bool linked_list_push_front_array(struct linked_list* list, void** values, size_t count)
+{
+    if (list == NULL || count == 0) {
+        return false;
+    }
+
+    size_t successfully_pushed = 0;
+
+    for (size_t i = count; i > 0; --i)
+    {
+        void* value = values[i - 1];
+
+        struct linked_list_node* new_node = malloc(sizeof(struct linked_list_node));
+
+        if (new_node == NULL)
+        {
+            // Rollback the successfully pushed elements.
+            rollback_on_push_front_array(list, successfully_pushed);
+            return false;
+        }
+
+        new_node->value = value;
+        new_node->next = list->head;
+
+        if (list->head == NULL)
+        {
+            list->tail = new_node;
+            new_node->prev = NULL;
+        } 
+        else
+        {
+            list->head->prev = new_node;
+            new_node->next = list->head;
+        }
+
+        list->head = new_node;
+        list->size++;
+        successfully_pushed++;
+    }
+
+    return true;
+}
+
+bool linked_list_push_back_array(struct linked_list* list, void** values, size_t count)
+{
+    if (list == NULL || count == 0) {
+        return false;
+    }
+
+    size_t successfully_pushed = 0;
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        void* value = values[i];
+
+        struct linked_list_node* new_node = malloc(sizeof(struct linked_list_node));
+
+        if (new_node == NULL)
+        {
+            // Rollback the successfully pushed elements.
+            rollback_on_push_back_array(list, successfully_pushed);
+            return false;
+        }
+
+        new_node->value = value;
+        new_node->next = NULL;
+
+        if (list->tail == NULL)
+        {
+            list->head = new_node;
+            new_node->prev = NULL;
+        } 
+        else
+        {
+            list->tail->next = new_node;
+            new_node->prev = list->tail;
+        }
+
+        list->tail = new_node;
+        list->size++;
+        successfully_pushed++;
+    }
+
+    return true;
+}
+
+static void purge_local_list(struct linked_list_node* local_head)
+{
+    while (local_head)
+    {
+        struct linked_list_node* next = local_head->next;
+
+        free(local_head);
+
+        local_head = next;
+    }
+}
+
+bool linked_list_insert_array(struct linked_list* list, size_t index, void** values, size_t count)
+{
+    if (list == NULL || count == 0)
+    {
+        return false;
+    }
+
+    enum ll_error_code err;
+
+    check_insertion_index_bounds(list, index, &err);
+
+    if (err != LL_NO_ERROR)
+    {
+        return false;
+    }
+
+    if (index == 0)
+    {
+        return linked_list_push_front_array(list, values, count);
+    }
+    
+    if (index == linked_list_size(list))
+    {
+        return linked_list_push_back_array(list, values, count);
+    }
+
+    // Construct the linked list to insert:
+    struct linked_list_node* local_head = malloc(sizeof(*local_head));
+    struct linked_list_node* local_tail = local_head;
+    struct linked_list_node* local_pred;
+    struct linked_list_node* local_succ;
+
+    if (local_head == NULL)
+    {
+        return false;
+    }
+
+    local_head->value = values[0];
+    local_head->next  = NULL;
+
+    for (size_t i = 1; i < count; ++i)
+    {
+        struct linked_list_node* new_local_node = malloc(sizeof(*new_local_node));
+
+        if (new_local_node == NULL)
+        {
+            purge_local_list(local_head);
+            return false;
+        }
+
+        local_tail->next     = new_local_node;
+        new_local_node->prev = local_tail;
+        local_tail           = new_local_node;
+    }
+
+    // Stitch the new linked list something in between:
+    local_pred->next = local_head;
+    local_head->prev = local_pred;
+    local_tail->next = local_succ;
+    local_succ->prev = local_tail;
+
+    return true;
+}
 
 // Size querying functions.
-size_t linked_list_size(struct linked_list* list);
-bool linked_list_is_empty(struct linked_list* list);
+size_t linked_list_size(struct linked_list* list)
+{
+    CHECK_NOT_NULL(list);
+
+    return list->size;
+}
+
+bool linked_list_is_empty(struct linked_list* list)
+{
+    CHECK_NOT_NULL(list);
+
+    return list->size;
+}
 
 // Access functions.
 bool linked_list_front(struct linked_list* list, void** value);
