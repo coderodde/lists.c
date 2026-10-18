@@ -23,5 +23,8 @@
     <ClCompile Include="linked_list.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="demo.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

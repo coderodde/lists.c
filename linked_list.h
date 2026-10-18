@@ -15,7 +15,7 @@ enum ll_error_code {
 struct linked_list;
 struct linked_list_iterator;
 
-struct linked_list* linked_list_create();
+struct linked_list* linked_list_create(void);
 
 // Insertion functions.
 bool linked_list_push_front(struct linked_list* list, void* value);
@@ -35,9 +35,9 @@ bool linked_list_back(struct linked_list* list, void** value);
 bool linked_list_get(struct linked_list* list, size_t index, void** value);
 
 // Removal functions.
-void* linked_list_pop_front(struct linked_list* list);
-void* linked_list_pop_back(struct linked_list* list);
-void* linked_list_remove(struct linked_list* list, size_t index);
+bool linked_list_pop_front(struct linked_list* list, void** value);
+bool linked_list_pop_back(struct linked_list* list, void** value);
+bool linked_list_remove(struct linked_list* list, size_t index, void** value);
 bool linked_list_remove_sub_list(struct linked_list* list, size_t index, size_t count);
 void linked_list_clear(struct linked_list* list);
 

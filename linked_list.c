@@ -39,7 +39,21 @@ struct linked_list_iterator {
     size_t next_index;
 };
 
-struct linked_list* linked_list_create();
+struct linked_list* linked_list_create()
+{
+    struct linked_list* list = malloc(sizeof *list);
+
+    if (list == NULL)
+    {
+        return list;
+    }
+
+    list->head = NULL;
+    list->tail = NULL;
+    list->size = 0;
+
+    return list;
+}
 
 static struct linked_list_node* get_node(struct linked_list* list, size_t index)
 {
@@ -66,6 +80,27 @@ static struct linked_list_node* get_node(struct linked_list* list, size_t index)
         }
 
         return current;
+    }
+}
+
+static void unlink_node(struct linked_list* list, struct linked_list_node* node)
+{
+    if (node->prev != NULL)
+    {
+        node->prev->next = node->next;
+    }
+    else
+    {
+        list->head = list->head->next;
+    }
+
+    if (node->next != NULL)
+    {
+        node->next->prev = node->prev;
+    }
+    else
+    {
+        list->tail = list->tail->prev;
     }
 }
 
@@ -431,55 +466,220 @@ bool linked_list_insert_array(struct linked_list* list, size_t index, void** val
 // Size querying functions.
 size_t linked_list_size(struct linked_list* list)
 {
-    CHECK_NOT_NULL(list);
-
-    return list->size;
+    return list != NULL ? list->size : 0;
 }
 
 bool linked_list_is_empty(struct linked_list* list)
 {
-    CHECK_NOT_NULL(list);
-
-    return list->size;
+    return list != NULL ? list->size == 0 : true;
 }
 
 // Access functions.
-bool linked_list_front(struct linked_list* list, void** value);
-bool linked_list_back(struct linked_list* list, void** value);
-bool linked_list_get(struct linked_list* list, size_t index, void** value);
+bool linked_list_front(struct linked_list* list, void** value)
+{
+    if (list == NULL)
+    {
+        return false;
+    }
+
+    if (list->size == 0)
+    {
+        return false;
+    }
+    
+    *value = list->head->value;
+    return true;
+}
+
+bool linked_list_back(struct linked_list* list, void** value)
+{
+    if (list == NULL)
+    {
+        return false;
+    }
+
+    if (list->size == 0)
+    {
+        return false;
+    }
+
+    *value = list->tail->value;
+    return true;
+}
+
+bool linked_list_get(struct linked_list* list, size_t index, void** value)
+{
+    if (list == NULL)
+    {
+        return false;
+    }
+
+    if (list->size == 0)
+    {
+        return false;
+    }
+
+    enum ll_error_code err;
+
+    check_access_index_bounds(list, index, &err);
+
+    if (err != LL_NO_ERROR)
+    {
+        return false;
+    }
+
+    struct linked_list_node* node = get_node(list, index);
+    *value = node->value;
+    return true;
+}
 
 // Removal functions.
-void* linked_list_pop_front(struct linked_list* list);
-void* linked_list_pop_back(struct linked_list* list);
-void* linked_list_remove(struct linked_list* list, size_t index);
-bool linked_list_remove_sub_list(struct linked_list* list, size_t index, size_t count);
-void linked_list_clear(struct linked_list* list);
-
-// Access the node at the given index. 
-// This function is used internally by other functions to access nodes efficiently.
-static struct linked_list_node* get_node(struct linked_list* list, size_t index)
+bool linked_list_pop_front(struct linked_list* list, void** value)
 {
-    size_t left_distance  = index;
-    size_t right_distance = linked_list_size(list) - index - 1;
-
-    if (left_distance < right_distance) 
+    if (list == NULL || list->size == 0)
     {
-        struct linked_list_node* current = list->head;
+        return false;
+    }
 
-        for (size_t i = 0; i < index; ++i) 
-        {
-            current = current->next;
-        }
+    struct linked_list_node* head = list->head;
 
-        return current;
-    } else {
-        struct linked_list_node* current = list->tail;
+    if (value != NULL)
+    {
+        *value = head->value;
+    }
+
+    unlink_node(list, head);
+    return true;
+}
+
+bool linked_list_pop_back(struct linked_list* list, void** value)
+{
+    if (list == NULL || list->size == 0)
+    {
+        return false;
+    }
+
+    struct linked_list_node* tail = list->tail;
+
+    if (value != NULL)
+    {
+        *value = tail->value;   
+    }
+
+    unlink_node(list, tail);
+    return true;
+}
+
+bool linked_list_remove(struct linked_list* list, size_t index, void** value)
+{
+    if (list == NULL || list->size == 0)
+    {
+        return false;
+    }
+
+    enum ll_error_code err;
+
+    check_access_index_bounds(list, index, &err);
+
+    if (err != LL_NO_ERROR)
+    {
+        return false;
+    }
+
+    struct linked_list_node* node = get_node(list, index);
+
+    if (value != NULL)
+    {
+        *value = node->value;
+    }
+
+    unlink_node(list, node);
+    return true;
+}
+
+bool linked_list_remove_sub_list(struct linked_list* list, size_t index, size_t count)
+{
+    if (list == NULL || count == 0)
+    {
+        return false;
+    }
+
+    enum ll_error_code err;
+
+    check_access_index_bounds(list, index, &err);
+
+    if (err != LL_NO_ERROR)
+    {
+        return false;
+    }
+
+    size_t to_index = index + count;
+
+    if (to_index > list->size)
+    {
+        return false;
+    }
+
+    struct linked_list_node* remove_head  = get_node(list, index);
+    struct linked_list_node* remove_tail  = get_node(list, to_index - 1);
+    struct linked_list_node* pred         = remove_head->prev;
+    struct linked_list_node* succ         = remove_tail->next;
+    struct linked_list_node* current_node = remove_head;
+    
+    for (size_t i = 0; i < count; ++i)
+    {
+        struct linked_list_node* next = current_node->next;
+
+        free(current_node);
         
-        for (size_t i = 0; i < right_distance; ++i) {
-            current = current->prev;
-        }
+        current_node = next;
+    }
 
-        return current;
+    if (pred != NULL)
+    {
+        pred->next = succ;
+
+        if (succ != NULL)
+        {
+            succ->prev = pred;
+        }
+    }
+    else
+    {
+        list->head = succ;
+    }
+
+    if (succ != NULL)
+    {
+        succ->prev = pred;
+
+        if (pred != NULL)
+        {
+            pred->next = succ;
+        }
+    }
+    else
+    {
+        list->tail = pred;
+    }
+
+    return true;
+}
+
+void linked_list_clear(struct linked_list* list)
+{
+    if (list == NULL)
+    {
+        return;
+    }
+
+    struct linked_list_node* node = list->head;
+
+    while (node != NULL)
+    {
+        struct linked_list_node* next = node->next;
+        free(node);
+        node = next;
     }
 }
 
@@ -517,6 +717,7 @@ bool linked_list_iterator_next(struct linked_list_iterator* iterator, void** val
         return false;
     }
     
+    *value                  = iterator->last_returned->value;
     iterator->last_returned = iterator->next;
     iterator->next          = iterator->next->next;
     iterator->next_index++;
@@ -541,6 +742,7 @@ bool linked_list_iterator_prev(struct linked_list_iterator* iterator, void** val
         return false;
     }
 
+    *value                  = iterator->last_returned->value;
     iterator->last_returned = iterator->next = (iterator->next == NULL)
                             ? iterator->list->tail 
                             : iterator->next->prev;
@@ -684,7 +886,7 @@ bool linked_list_iterator_remove(struct linked_list_iterator* iterator)
 
     struct linked_list_node* last_next = iterator->last_returned->next;
 
-    unlink(last_next);
+    unlink_node(iterator->list, last_next);
 
     if (iterator->next == iterator->last_returned)
     {
