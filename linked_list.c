@@ -102,6 +102,9 @@ static void unlink_node(struct linked_list* list, struct linked_list_node* node)
     {
         list->tail = list->tail->prev;
     }
+
+    free(node);
+    list->size--;
 }
 
 static void check_access_index_bounds(struct linked_list* list, size_t index, enum ll_error_code* err)
@@ -341,6 +344,7 @@ bool linked_list_push_front_array(struct linked_list* list, void** values, size_
         successfully_pushed++;
     }
 
+    list->head->prev = NULL;
     return true;
 }
 
@@ -351,6 +355,7 @@ bool linked_list_push_back_array(struct linked_list* list, void** values, size_t
     }
 
     size_t successfully_pushed = 0;
+    struct linked_list_node* prev_node = list->tail;
 
     for (size_t i = 0; i < count; ++i)
     {
@@ -366,7 +371,8 @@ bool linked_list_push_back_array(struct linked_list* list, void** values, size_t
         }
 
         new_node->value = value;
-        new_node->next = NULL;
+        new_node->prev  = prev_node;
+        prev_node       = new_node;
 
         if (list->tail == NULL)
         {
@@ -384,6 +390,7 @@ bool linked_list_push_back_array(struct linked_list* list, void** values, size_t
         successfully_pushed++;
     }
 
+    list->tail->next = NULL;
     return true;
 }
 
@@ -663,6 +670,7 @@ bool linked_list_remove_sub_list(struct linked_list* list, size_t index, size_t 
         list->tail = pred;
     }
 
+    list->size -= count;
     return true;
 }
 
@@ -681,6 +689,9 @@ void linked_list_clear(struct linked_list* list)
         free(node);
         node = next;
     }
+
+    list->head = NULL;
+    list->tail = NULL;
 }
 
 // Iterator functions.
